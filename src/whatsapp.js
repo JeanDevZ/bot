@@ -1,13 +1,9 @@
-import makeWASocket, { useMultiFileAuthState, makeCacheableSignalKeyStore, Browsers, DisconnectReason } from '@whiskeysockets/baileys';
+import makeWASocket, { makeCacheableSignalKeyStore, Browsers, DisconnectReason } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import { modoMeme } from './utils/estado.js';
+import { useFirestoreAuthState, limpiarSesionFirestore } from './utils/auth_firestore.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SESSION_DIR = path.join(__dirname, '..', 'session');
 let sock;
 let botJid = null;
 const jidMap = {};
@@ -19,25 +15,19 @@ const ULTIMA_VEZ = {};
 const COOLDOWN_MS = 300;
 
 function limpiarSession() {
-  try {
-    if (fs.existsSync(SESSION_DIR)) {
-      fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-      console.log('🧹 Sesión eliminada correctamente.');
-    }
-  } catch (err) {
-    console.error('❌ Error al limpiar sesión:', err.message);
-  }
+  limpiarSesionFirestore();
+  console.log('Sesión eliminada.');
 }
 
 export async function iniciarCliente(alRecibirMensaje) {
   let state, saveCreds;
   try {
-    ({ state, saveCreds } = await useMultiFileAuthState(SESSION_DIR));
+    ({ state, saveCreds } = await useFirestoreAuthState());
   } catch (err) {
-    console.error('❌ Error al cargar estado de autenticación:', err.message);
-    console.log('🧹 Limpiando sesión corrupta...');
+    console.error('Error al cargar estado de autenticación:', err.message);
+    console.log('Limpiando sesión corrupta...');
     limpiarSession();
-    ({ state, saveCreds } = await useMultiFileAuthState(SESSION_DIR));
+    ({ state, saveCreds } = await useFirestoreAuthState());
   }
 
   sock = makeWASocket({
