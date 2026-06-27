@@ -29,9 +29,9 @@ export async function manejarEstablecerPresupuesto(from, texto, idUsuario) {
     return;
   }
 
-  if (!datos.categoria || !esNumeroValido(datos.montoLimite)) {
+  if (typeof datos.categoria !== 'string' || !esNumeroValido(datos.montoLimite)) {
     await enviarMensaje(from,
-      '🤔 Faltó categoría o monto. Ej:\n' +
+      'Faltó categoría o monto. Ej:\n' +
       '*presupuesto 1500 para transporte*'
     );
     return;

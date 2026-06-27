@@ -33,7 +33,7 @@ export function sanitizarJSON(texto) {
 }
 
 export function validarDatosIA(datos) {
-  if (!datos || typeof datos !== 'object') return false;
+  if (!datos || typeof datos !== 'object' || Array.isArray(datos)) return false;
   return true;
 }
 

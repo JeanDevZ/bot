@@ -16,11 +16,11 @@ const FB = '(?=[\\s.,!?;]|$)';
 const INTENCIONES = [
   { patron: RegExp(`\\b(gast[eé]|gastar|compre?|compr[ée]|pagu[eé])${FB}`, 'i'), handler: 'gasto' },
   { patron: RegExp(`\\b(recib[ióí]|ingreso|cobr[ée])${FB}`, 'i'), handler: 'ingreso' },
-  { patron: RegExp(`\\b(presupuesto|limite|límite)${FB}.*\\b(para|de)${FB}`, 'i'), handler: 'establecerPresupuesto' },
+  { patron: RegExp(`\\b(presupuesto|limite|límite)${FB}[\\s\\S]*?\\b(para|de)${FB}`, 'i'), handler: 'establecerPresupuesto' },
   { patron: RegExp(`\\b(mis recibos?|recibos? pendientes?|qu[eé] recibos?|ver recibos?|lista recibos?|mostrar recibos?|recibos? por pagar|cuentas por pagar|facturas pendientes|qu[eé] me falta pagar|qu[eé] debo|qu[eé] tengo que pagar|recibos? sin pagar)${FB}`, 'i'), handler: 'listarRecibos' },
   { patron: RegExp(`\\b(presupuestos?)${FB}`, 'i'), handler: 'presupuestos' },
   { patron: RegExp(`\\b(resumen|resume|cómo voy|cómo estoy|cómo vamos|mi situaci[óo]n|dame un resumen|panorama)${FB}`, 'i'), handler: 'resumen' },
-  { patron: RegExp(`\\b(recibos?|servicio)${FB}.*\\b(vence|vencimiento|pagar)${FB}`, 'i'), handler: 'recibo' },
+  { patron: RegExp(`\\b(recibos?|servicio)${FB}[\\s\\S]*?\\b(vence|vencimiento|pagar)${FB}`, 'i'), handler: 'recibo' },
   { patron: /^[\w.'%+-]+@[\w.-]+\.\w{2,}$/i, handler: 'vincular' },
   { patron: RegExp(`\\b(s[eé] t[uú] mism[ao]|habla normal|vuelve a la normalidad|s[eé] humano|modo normal|se tu mismo|habla como persona|no seas t[uú] mism[ao]|para de ser t[uú] mism[ao]|deja de ser t[uú] mism[ao]|comportamiento normal|modo asistente|vuelve a ser normal)${FB}`, 'i'), handler: 'toggleMeme' },
   { patron: RegExp(`\\b(vincular)${FB}`, 'i'), handler: 'vincular' },

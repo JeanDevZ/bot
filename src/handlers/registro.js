@@ -26,7 +26,7 @@ async function parsearConIA(texto, prompt) {
 }
 
 function validarCategoria(categoria) {
-  if (!categoria) return 'otros';
+  if (!categoria || typeof categoria !== 'string') return 'otros';
   const cat = categoria.toLowerCase();
   if (esCategoriaValida(cat)) return cat;
   for (const c of CATEGORIAS) {
@@ -54,29 +54,29 @@ async function preguntarCategoria(from, monto, tipo, datos, texto) {
     `¿En qué ${etiqueta} S/${monto.toFixed(2)}?\n\n` +
     `Categorías: ${CATEGORIAS.join(', ')}`
   );
-  pendingRegistros.set(from, { tipo, monto, descripcion: datos.descripcion || null, fecha: datos.fecha || null, texto });
+  pendingRegistros.set(from, { tipo, monto, descripcion: typeof datos.descripcion === 'string' ? datos.descripcion : null, fecha: typeof datos.fecha === 'string' ? datos.fecha : null, texto });
 }
 
 export async function manejarRespuestaPendiente(from, texto, idUsuario) {
-  const pendiente = pendingRegistros.get(from);
-  pendingRegistros.delete(from);
-
-  const ia = await parsearConIA(texto,
-    `Extrae solo la categoría del texto. Categorías válidas: ${CATEGORIAS.join(', ')}. Responde SOLO JSON: { categoria: string }`
-  );
-
-  let categoria = pendiente.tipo === 0 ? 'otros' : 'otros';
-  if (ia && ia.categoria) {
-    categoria = validarCategoria(ia.categoria);
-  } else {
-    const catEnTexto = validarCategoria(texto);
-    if (catEnTexto !== 'otros') categoria = catEnTexto;
-  }
-
-  const fecha = pendiente.fecha || new Date().toISOString().split('T')[0];
-
-  const db = getFirestore();
   try {
+    const pendiente = pendingRegistros.get(from);
+    pendingRegistros.delete(from);
+
+    const ia = await parsearConIA(texto,
+      `Extrae solo la categoría del texto. Categorías válidas: ${CATEGORIAS.join(', ')}. Responde SOLO JSON: { categoria: string }`
+    );
+
+    let categoria = pendiente.tipo === 0 ? 'otros' : 'otros';
+    if (ia && typeof ia.categoria === 'string') {
+      categoria = validarCategoria(ia.categoria);
+    } else if (typeof texto === 'string') {
+      const catEnTexto = validarCategoria(texto);
+      if (catEnTexto !== 'otros') categoria = catEnTexto;
+    }
+
+    const fecha = typeof pendiente.fecha === 'string' ? pendiente.fecha : new Date().toISOString().split('T')[0];
+
+    const db = getFirestore();
     await db.collection('transacciones').add({
       idUsuario, tipo: pendiente.tipo, monto: pendiente.monto,
       categoria, descripcion: pendiente.descripcion,
@@ -87,7 +87,7 @@ export async function manejarRespuestaPendiente(from, texto, idUsuario) {
       idUsuario, tipo: pendiente.tipo, monto: pendiente.monto,
       categoria, descripcion: pendiente.descripcion,
       fecha, fechaCreacion: new Date().toISOString(),
-    }).catch(e => console.error('❌ Error sync backup:', e.message));
+    }).catch(e => console.error('Error sync backup:', e.message));
 
     const signo = pendiente.tipo === 0 ? '💸' : '💰';
     const label = pendiente.tipo === 0 ? 'Gasto' : 'Ingreso';
@@ -99,8 +99,8 @@ export async function manejarRespuestaPendiente(from, texto, idUsuario) {
       `\n📅 ${formatearFecha(fecha)} ⏰ ${generarTimestamp()}\n${chiste}`
     );
   } catch (err) {
-    console.error('❌ Error al guardar:', err.message);
-    await enviarMensaje(from, '❌ No pude guardar, intenta de nuevo 🙏');
+    console.error('Error al guardar:', err.message);
+    await enviarMensaje(from, 'No pude guardar, intenta de nuevo');
   }
 }
 
@@ -116,38 +116,39 @@ export async function manejarRegistroGasto(from, texto, idUsuario) {
     return;
   }
 
-  if ((!datos.categoria || validarCategoria(datos.categoria) === 'otros') && !tieneCategoriaEnTexto(texto)) {
+  if ((!datos.categoria || typeof datos.categoria !== 'string' || validarCategoria(datos.categoria) === 'otros') && !tieneCategoriaEnTexto(texto)) {
     await preguntarCategoria(from, datos.monto, 0, datos, texto);
     return;
   }
 
   const categoria = validarCategoria(datos.categoria);
-  const fecha = datos.fecha || new Date().toISOString().split('T')[0];
+  const fecha = typeof datos.fecha === 'string' ? datos.fecha : new Date().toISOString().split('T')[0];
+  const descripcion = typeof datos.descripcion === 'string' ? datos.descripcion : null;
 
   const db = getFirestore();
   try {
     await db.collection('transacciones').add({
       idUsuario, tipo: 0, monto: datos.monto,
-      categoria, descripcion: datos.descripcion || null,
+      categoria, descripcion,
       fecha, fechaCreacion: new Date().toISOString(),
     });
 
     sincronizarTransaccion(idUsuario, {
       idUsuario, tipo: 0, monto: datos.monto,
-      categoria, descripcion: datos.descripcion || null,
+      categoria, descripcion,
       fecha, fechaCreacion: new Date().toISOString(),
-    }).catch(e => console.error('❌ Error sync backup:', e.message));
+    }).catch(e => console.error('Error sync backup:', e.message));
 
     const gastoMsg = chisteGasto(datos.monto);
     await enviarMensaje(from,
       `✅ ¡Registrado! 🎯\n` +
       `💸 S/${datos.monto.toFixed(2)} en ${categoria}` +
-      (datos.descripcion ? `\n📝 ${datos.descripcion}` : '') +
+      (descripcion ? `\n📝 ${descripcion}` : '') +
       `\n📅 ${formatearFecha(fecha)} ⏰ ${generarTimestamp()}\n${gastoMsg}`
     );
   } catch (err) {
-    console.error('❌ Error al guardar gasto:', err.message);
-    await enviarMensaje(from, '❌ No pude guardar el gasto, intenta de nuevo 🙏');
+    console.error('Error al guardar gasto:', err.message);
+    await enviarMensaje(from, 'No pude guardar el gasto, intenta de nuevo');
   }
 }
 
@@ -163,38 +164,39 @@ export async function manejarRegistroIngreso(from, texto, idUsuario) {
     return;
   }
 
-  if ((!datos.categoria || validarCategoria(datos.categoria) === 'otros') && !tieneCategoriaEnTexto(texto)) {
+  if ((!datos.categoria || typeof datos.categoria !== 'string' || validarCategoria(datos.categoria) === 'otros') && !tieneCategoriaEnTexto(texto)) {
     await preguntarCategoria(from, datos.monto, 1, datos, texto);
     return;
   }
 
   const categoria = validarCategoria(datos.categoria);
-  const fecha = datos.fecha || new Date().toISOString().split('T')[0];
+  const fecha = typeof datos.fecha === 'string' ? datos.fecha : new Date().toISOString().split('T')[0];
+  const descripcion = typeof datos.descripcion === 'string' ? datos.descripcion : null;
 
   const db = getFirestore();
   try {
     await db.collection('transacciones').add({
       idUsuario, tipo: 1, monto: datos.monto,
-      categoria, descripcion: datos.descripcion || null,
+      categoria, descripcion,
       fecha, fechaCreacion: new Date().toISOString(),
     });
 
     sincronizarTransaccion(idUsuario, {
       idUsuario, tipo: 1, monto: datos.monto,
-      categoria, descripcion: datos.descripcion || null,
+      categoria, descripcion,
       fecha, fechaCreacion: new Date().toISOString(),
-    }).catch(e => console.error('❌ Error sync backup:', e.message));
+    }).catch(e => console.error('Error sync backup:', e.message));
 
     const ingresoMsg = chisteIngreso(datos.monto);
     await enviarMensaje(from,
       `✅ ¡Registrado! 🤑\n` +
       `💰 +S/${datos.monto.toFixed(2)} en ${categoria}` +
-      (datos.descripcion ? `\n📝 ${datos.descripcion}` : '') +
+      (descripcion ? `\n📝 ${descripcion}` : '') +
       `\n📅 ${formatearFecha(fecha)} ⏰ ${generarTimestamp()}\n${ingresoMsg}`
     );
   } catch (err) {
-    console.error('❌ Error al guardar ingreso:', err.message);
-    await enviarMensaje(from, '❌ Falló el registro del ingreso, intenta otra vez 🙏');
+    console.error('Error al guardar ingreso:', err.message);
+    await enviarMensaje(from, 'Falló el registro del ingreso, intenta otra vez');
   }
 }
 
