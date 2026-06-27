@@ -10,8 +10,15 @@ export function inicializarFirebase() {
   if (admin.apps.length) return admin.firestore();
 
   let credenciales;
+
   if (process.env.FIREBASE_CREDENTIALS_JSON) {
     credenciales = JSON.parse(process.env.FIREBASE_CREDENTIALS_JSON);
+  } else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+    credenciales = {
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+      private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    };
   } else {
     const ruta = resolve(__dirname, '..', process.env.FIREBASE_CREDENTIALS_PATH || './firebase-credentials.json');
     credenciales = JSON.parse(readFileSync(ruta, 'utf8'));
