@@ -40,7 +40,7 @@ export async function iniciarCliente(alRecibirMensaje) {
   sock.ev.on('connection.update', async ({ qr, connection, lastDisconnect }) => {
     if (qr) {
       console.log('?? ESCANEA ESTE QR CON WHATSAPP (el que usas normalmente):');
-      const url = `https://quickchart.io/qr?${encodeURIComponent(qr)}&size=500`;
+      const url = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qr)}`;
       console.log(`?? Abre este link en tu navegador y escanea: ${url}`);
       qrcode.generate(qr, { small: true });
     }
