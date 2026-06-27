@@ -1,0 +1,19 @@
+{
+  "name": "backend-chatbot",
+  "version": "1.0.0",
+  "description": "WhatsApp Chatbot para app financiera",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "firebase-admin": "^12.1.0",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
