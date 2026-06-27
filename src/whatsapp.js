@@ -40,6 +40,7 @@ export async function iniciarCliente(alRecibirMensaje) {
   sock.ev.on('connection.update', async ({ qr, connection, lastDisconnect }) => {
     if (qr) {
       console.log('🔴 ESCANEA ESTE QR CON WHATSAPP (el que usas normalmente):');
+      console.log(qr.replace(/\n/g, '\\n'));
       qrcode.generate(qr, { small: true });
     }
 

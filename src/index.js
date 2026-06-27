@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import http from 'http';
 import { inicializarFirebase, getFirestore } from './firebase.js';
 import { iniciarCliente, enviarMensaje } from './whatsapp.js';
 import { manejarInicio, manejarVinculacion, manejarDesvinculacion, manejarSincronizacion } from './handlers/vinculacion.js';
@@ -118,6 +119,14 @@ async function manejarMensaje(from, texto) {
     await enviarMensaje(from, '❌ Algo salió mal, intenta de nuevo en un ratito 🙏');
   }
 }
+
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Bot WhatsApp activo');
+}).listen(PORT, () => {
+  console.log(`🌐 Servidor HTTP en puerto ${PORT} (para Render)`);
+});
 
 console.log('🤖 Iniciando chatbot WhatsApp...');
 iniciarCliente(manejarMensaje);
