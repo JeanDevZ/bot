@@ -129,4 +129,8 @@ http.createServer((req, res) => {
 });
 
 console.log('🤖 Iniciando chatbot WhatsApp...');
-iniciarCliente(manejarMensaje);
+iniciarCliente(manejarMensaje).catch(err => {
+  console.error('❌ Error fatal al iniciar cliente WhatsApp:', err.message);
+  console.log('🔄 Reintentando en 5s...');
+  setTimeout(() => iniciarCliente(manejarMensaje), 5000);
+});

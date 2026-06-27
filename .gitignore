@@ -1,8 +1,4 @@
-Add-Content -Path ".gitignore" -Value @"
-session/
 node_modules/
-.env
-firebase-credentials.json
 session/
-node_modules/.env
+.env
 firebase-credentials.json

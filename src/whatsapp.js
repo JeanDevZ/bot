@@ -1,7 +1,8 @@
-import makeWASocket, { useMultiFileAuthState, makeCacheableSignalKeyStore, Browsers } from '@whiskeysockets/baileys';
+import makeWASocket, { useMultiFileAuthState, makeCacheableSignalKeyStore, Browsers, DisconnectReason } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { modoMeme } from './utils/estado.js';
 
@@ -11,12 +12,33 @@ let sock;
 let botJid = null;
 const jidMap = {};
 const grupoMap = {};
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 8;
 
 const ULTIMA_VEZ = {};
 const COOLDOWN_MS = 300;
 
+function limpiarSession() {
+  try {
+    if (fs.existsSync(SESSION_DIR)) {
+      fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+      console.log('🧹 Sesión eliminada correctamente.');
+    }
+  } catch (err) {
+    console.error('❌ Error al limpiar sesión:', err.message);
+  }
+}
+
 export async function iniciarCliente(alRecibirMensaje) {
-  const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+  let state, saveCreds;
+  try {
+    ({ state, saveCreds } = await useMultiFileAuthState(SESSION_DIR));
+  } catch (err) {
+    console.error('❌ Error al cargar estado de autenticación:', err.message);
+    console.log('🧹 Limpiando sesión corrupta...');
+    limpiarSession();
+    ({ state, saveCreds } = await useMultiFileAuthState(SESSION_DIR));
+  }
 
   sock = makeWASocket({
     auth: {
@@ -39,28 +61,85 @@ export async function iniciarCliente(alRecibirMensaje) {
 
   sock.ev.on('connection.update', async ({ qr, connection, lastDisconnect }) => {
     if (qr) {
-      console.log('?? ESCANEA ESTE QR CON WHATSAPP (el que usas normalmente):');
+      console.log('📱 ESCANEA ESTE QR CON WHATSAPP (el que usas normalmente):');
       const url = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qr)}`;
-      console.log(`?? Abre este link en tu navegador y escanea: ${url}`);
+      console.log(`🔗 Abre este link en tu navegador y escanea: ${url}`);
       qrcode.generate(qr, { small: true });
+      reconnectAttempts = 0;
     }
 
     if (connection === 'open') {
       botJid = sock.user?.id?.replace(/:.*$/, '') || null;
       console.log('✅ WhatsApp conectado exitosamente' + (botJid ? ` como ${botJid}` : ''));
+      reconnectAttempts = 0;
     }
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      if (statusCode === 440) {
-        console.log('❌ Conflicto de sesión (440). Cerrando sesión anterior y esperando 30s...');
-        setTimeout(() => iniciarCliente(alRecibirMensaje), 30000);
-      } else if (statusCode === 429) {
-        console.log('⏳ Rate limited (429). Esperando 60s...');
-        setTimeout(() => iniciarCliente(alRecibirMensaje), 60000);
-      } else {
-        console.log(`❌ Conexión cerrada (código: ${statusCode || '?'}). Reintentando en 10s...`);
-        setTimeout(() => iniciarCliente(alRecibirMensaje), 10000);
+      const reason = lastDisconnect?.error?.message || '';
+
+      console.log(`❌ Conexión cerrada (código: ${statusCode || '?'}, motivo: ${reason}). Intento #${reconnectAttempts + 1}`);
+
+      switch (statusCode) {
+        case DisconnectReason.restartRequired: // 515 - Baileys pide reinicio
+          console.log('🔄 Baileys solicita reinicio (515). Reintentando en 3s...');
+          setTimeout(() => iniciarCliente(alRecibirMensaje), 3000);
+          break;
+
+        case DisconnectReason.connectionReplaced: // 440 - conflicto de sesión
+          console.log('🔄 Conflicto de sesión (440). Esperando 30s...');
+          reconnectAttempts = 0;
+          setTimeout(() => iniciarCliente(alRecibirMensaje), 30000);
+          break;
+
+        case DisconnectReason.connectionClosed: // 428 - cierre normal
+        case DisconnectReason.connectionLost: // 408 - timeout
+        case DisconnectReason.timedOut:
+          reconnectAttempts++;
+          if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            console.log('🚨 Muchos errores de conexión seguidos. Limpiando sesión...');
+            limpiarSession();
+            reconnectAttempts = 0;
+            setTimeout(() => iniciarCliente(alRecibirMensaje), 5000);
+          } else {
+            const delay = Math.min(5000 * Math.pow(2, reconnectAttempts - 1), 60000);
+            console.log(`🔄 Reintentando en ${delay / 1000}s... (intento ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+            setTimeout(() => iniciarCliente(alRecibirMensaje), delay);
+          }
+          break;
+
+        case DisconnectReason.badSession: // 500 - sesión corrupta
+          console.log('🚨 Sesión inválida (500). Limpiando y forzando nuevo QR...');
+          limpiarSession();
+          reconnectAttempts = 0;
+          setTimeout(() => iniciarCliente(alRecibirMensaje), 3000);
+          break;
+
+        case DisconnectReason.loggedOut: // 401 - cerraron sesión
+          console.log('🚨 Sesión cerrada remotamente (401). Limpiando y forzando nuevo QR...');
+          limpiarSession();
+          reconnectAttempts = 0;
+          setTimeout(() => iniciarCliente(alRecibirMensaje), 3000);
+          break;
+
+        case DisconnectReason.unavailableService: // 503 - servicio no disponible
+          console.log('⏳ Servicio no disponible (503). Esperando 60s...');
+          setTimeout(() => iniciarCliente(alRecibirMensaje), 60000);
+          break;
+
+        default:
+          reconnectAttempts++;
+          if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            console.log('🚨 Demasiados errores seguidos. Limpiando sesión...');
+            limpiarSession();
+            reconnectAttempts = 0;
+            setTimeout(() => iniciarCliente(alRecibirMensaje), 5000);
+          } else {
+            const delay = Math.min(10000 * Math.pow(1.3, reconnectAttempts - 1), 30000);
+            console.log(`🔄 Error desconocido. Reintentando en ${delay / 1000}s...`);
+            setTimeout(() => iniciarCliente(alRecibirMensaje), delay);
+          }
+          break;
       }
     }
   });
